@@ -570,11 +570,12 @@ async function fetchGainers() {
     // Step 1: get all INR tickers, keep top 30 by 24h volume (active markets only)
     const res  = await safeFetch('https://api.coindcx.com/exchange/ticker');
     const data = await res.json();
-    const STABLES = new Set(['USDC','BUSD','TUSD','DAI','FRAX','USDP','GUSD','SUSD','LUSD','USDD','FDUSD','PYUSD','AEUR','EURI']);
+    const STABLES  = new Set(['USDC','BUSD','TUSD','DAI','FRAX','USDP','GUSD','SUSD','LUSD','USDD','FDUSD','PYUSD','AEUR','EURI']);
+    const BIG_CAPS = new Set(['BTC','ETH','BNB','XRP','SOL','ADA','AVAX','DOT','MATIC','POL','LINK','LTC','BCH','XLM','ATOM','VET','ETC','NEAR','ALGO','ICP','FIL','AAVE','UNI','THETA','XMR','EGLD','HBAR','EOS','TRX','DOGE','TON','APT','ARB','OP','SUI','SEI','INJ','TIA','RUNE','KAS','RENDER','IMX','GRT','LDO','MKR','SNX','CRV','COMP','YFI','SUSHI','1INCH','BAL','OCEAN','BAND','ZRX','ENJ','CHZ','HOT','OMG','ZIL','ICX','ONT','QTUM','ZEC','DASH','DCR','LSK','WAVES','XEM','NANO','DGB','SC','BTT','WIN','SXP','KAVA','CELO','ONE','ROSE','ANKR','SKL','CKB','CELR','DENT','RVN','SRM','RAY','FIDA','SAMO','COPE']);
     const candidates = data
-      .filter(t => t.market.endsWith('USDT') && parseFloat(t.volume) > 0 && !STABLES.has(t.market.replace(/USDT$/, '')))
+      .filter(t => t.market.endsWith('USDT') && parseFloat(t.volume) > 0 && !STABLES.has(t.market.replace(/USDT$/, '')) && !BIG_CAPS.has(t.market.replace(/USDT$/, '')))
       .sort((a, b) => parseFloat(b.volume) - parseFloat(a.volume))
-      .slice(0, 60);
+      .slice(0, 40);
 
     // Step 2: fetch last closed 1H candle for each and calculate 1H % change
     dbgLog(`Ticker OK — ${data.length} total, ${candidates.length} USDT candidates by volume`);
@@ -602,7 +603,7 @@ async function fetchGainers() {
         results.push({ market: coin.market, last_price: coin.last_price, change1h });
         setStatus('on', `Scanning ${i+1}/${candidates.length}`);
       } catch (e) { dbgLog(`${coin.market} scan err: ${e.message.slice(0,40)}`); }
-      await sleep(150);
+      await sleep(1000);
     }
 
     // Step 3: top 15 gainers + top 10 losers
