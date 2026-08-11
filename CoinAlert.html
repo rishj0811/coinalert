@@ -536,9 +536,9 @@ function scheduleCheck() {
 
 // ─── Fetch with proxy fallback ────────────────────────────────────
 const PROXIES = [
+  u => `https://corsproxy.io/?${encodeURIComponent(u)}`,
   u => `https://api.allorigins.win/raw?url=${encodeURIComponent(u)}`,
   u => `https://api.codetabs.com/v1/proxy?quest=${encodeURIComponent(u)}`,
-  u => `https://corsproxy.io/?${encodeURIComponent(u)}`,
 ];
 
 async function safeFetch(url) {
@@ -551,7 +551,7 @@ async function safeFetch(url) {
     dbgLog(`direct ${r.status}`);
   } catch (e) { dbgLog(`direct err: ${e.message.slice(0,40)}`); }
 
-  const labels = ['allorigins', 'codetabs', 'corsproxy'];
+  const labels = ['corsproxy', 'allorigins', 'codetabs'];
   for (let i = 0; i < PROXIES.length; i++) {
     try {
       const r = await fetch(PROXIES[i](url));
