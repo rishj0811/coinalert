@@ -261,7 +261,7 @@
 
       <div class="card" style="margin-top:14px">
         <div class="gainers-hdr">
-          <div class="card-label" style="margin:0">Top 20 Drops — Last 1H</div>
+          <div class="card-label" style="margin:0">Top 15 Gainers + 10 Losers — Last 1H</div>
           <button class="refresh-btn" id="refreshBtn" onclick="manualRefresh()" disabled>Refresh</button>
         </div>
         <div class="updated-txt" id="updatedTxt"></div>
@@ -570,8 +570,9 @@ async function fetchGainers() {
     // Step 1: get all INR tickers, keep top 30 by 24h volume (active markets only)
     const res  = await safeFetch('https://api.coindcx.com/exchange/ticker');
     const data = await res.json();
+    const STABLES = new Set(['USDC','BUSD','TUSD','DAI','FRAX','USDP','GUSD','SUSD','LUSD','USDD','FDUSD','PYUSD','AEUR','EURI']);
     const candidates = data
-      .filter(t => t.market.endsWith('USDT') && parseFloat(t.volume) > 0)
+      .filter(t => t.market.endsWith('USDT') && parseFloat(t.volume) > 0 && !STABLES.has(t.market.replace(/USDT$/, '')))
       .sort((a, b) => parseFloat(b.volume) - parseFloat(a.volume))
       .slice(0, 60);
 
@@ -604,13 +605,12 @@ async function fetchGainers() {
       await sleep(150);
     }
 
-    // Step 3: keep only drops, sort biggest drop first, take top 20
-    topGainers = results
-      .filter(r => r.change1h < 0)
-      .sort((a, b) => a.change1h - b.change1h)
-      .slice(0, 20);
+    // Step 3: top 15 gainers + top 10 losers
+    const gainers = results.filter(r => r.change1h > 0).sort((a, b) => b.change1h - a.change1h).slice(0, 15);
+    const losers  = results.filter(r => r.change1h < 0).sort((a, b) => a.change1h - b.change1h).slice(0, 10);
+    topGainers = [...gainers, ...losers];
 
-    sysLog(`Scan done — ${results.length} coins fetched, ${topGainers.length} drops found`);
+    sysLog(`Scan done — ${gainers.length} gainers, ${losers.length} losers selected`);
     renderGainers();
     document.getElementById('updatedTxt').textContent = 'Updated ' + ts();
     setStatus('on', 'Monitoring');
