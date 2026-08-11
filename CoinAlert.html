@@ -1,0 +1,808 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
+  <meta name="theme-color" content="#0d1117">
+  <title>CoinAlert</title>
+  <style>
+    :root {
+      --bg: #0d1117;
+      --surface: #161b22;
+      --surface2: #21262d;
+      --border: #30363d;
+      --text: #e6edf3;
+      --muted: #8b949e;
+      --green: #3fb950;
+      --red: #f85149;
+      --yellow: #e3b341;
+      --blue: #58a6ff;
+      --accent: #1f6feb;
+    }
+    * { box-sizing: border-box; margin: 0; padding: 0; -webkit-tap-highlight-color: transparent; }
+    html, body { height: 100%; overflow: hidden; }
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+      background: var(--bg);
+      color: var(--text);
+      display: flex;
+      flex-direction: column;
+      height: 100vh;
+      height: 100dvh;
+    }
+
+    /* Header */
+    .header {
+      display: flex; align-items: center; justify-content: space-between;
+      padding: 14px 16px 12px;
+      background: var(--surface);
+      border-bottom: 1px solid var(--border);
+      flex-shrink: 0;
+    }
+    .header-title { font-size: 17px; font-weight: 700; }
+    .header-sub   { font-size: 11px; color: var(--muted); font-weight: 400; margin-left: 6px; }
+    .status-pill {
+      display: flex; align-items: center; gap: 6px;
+      padding: 5px 11px; border-radius: 20px;
+      background: var(--surface2); border: 1px solid var(--border);
+      font-size: 12px; color: var(--muted);
+      transition: all 0.3s;
+    }
+    .status-pill.on  { color: var(--green); border-color: rgba(63,185,80,.4); background: rgba(63,185,80,.08); }
+    .status-pill.err { color: var(--red);   border-color: rgba(248,81,73,.4); background: rgba(248,81,73,.08); }
+    .sdot { width: 7px; height: 7px; border-radius: 50%; background: currentColor; flex-shrink: 0; }
+    .status-pill.on .sdot { animation: blink 2s infinite; }
+    @keyframes blink { 0%,100%{opacity:1} 50%{opacity:.3} }
+
+    /* Content */
+    .content { flex: 1; overflow: hidden; }
+    .page { display: none; height: 100%; overflow-y: auto; -webkit-overflow-scrolling: touch; }
+    .page.active { display: block; }
+    #page-log { flex-direction: column; }
+    #page-log.active { display: flex; }
+
+    /* Bottom nav */
+    .bottom-nav {
+      display: flex; background: var(--surface);
+      border-top: 1px solid var(--border); flex-shrink: 0;
+    }
+    .nav-btn {
+      flex: 1; padding: 9px 0 7px;
+      background: none; border: none;
+      color: var(--muted); display: flex; flex-direction: column;
+      align-items: center; gap: 3px;
+      cursor: pointer; font-size: 10px;
+    }
+    .nav-btn.active { color: var(--blue); }
+    .nav-btn svg { width: 22px; height: 22px; }
+    .nav-wrap { position: relative; display: flex; flex-direction: column; align-items: center; gap: 3px; }
+    .badge {
+      position: absolute; top: -4px; right: -10px;
+      background: var(--red); color: #fff;
+      font-size: 9px; font-weight: 700;
+      min-width: 15px; height: 15px;
+      border-radius: 8px; padding: 0 3px;
+      display: none; align-items: center; justify-content: center;
+    }
+    .badge.show { display: flex; }
+
+    /* Cards */
+    .pad { padding: 14px 16px; }
+    .card {
+      background: var(--surface); border: 1px solid var(--border);
+      border-radius: 14px; padding: 14px; margin-bottom: 12px;
+    }
+    .card-label { font-size: 10px; text-transform: uppercase; letter-spacing: .8px; color: var(--muted); margin-bottom: 10px; }
+
+    /* Countdown */
+    .countdown-row { display: flex; align-items: baseline; gap: 10px; }
+    .countdown { font-size: 38px; font-weight: 700; font-variant-numeric: tabular-nums; color: var(--blue); }
+    .countdown-sub { font-size: 12px; color: var(--muted); }
+
+    /* Control button */
+    .ctrl-btn {
+      width: 100%; padding: 13px; border-radius: 10px; border: none;
+      font-size: 15px; font-weight: 600; cursor: pointer; transition: opacity .15s;
+    }
+    .ctrl-btn:active { opacity: .75; }
+    .ctrl-btn.start { background: var(--green); color: #000; }
+    .ctrl-btn.stop  { background: var(--red);   color: #fff; }
+
+    /* Gainers */
+    .gainers-hdr { display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px; }
+    .refresh-btn { font-size: 12px; color: var(--blue); background: none; border: none; cursor: pointer; padding: 2px 6px; }
+    .refresh-btn:disabled { color: var(--muted); cursor: default; }
+    .updated-txt { font-size: 11px; color: var(--muted); margin-bottom: 8px; }
+
+    .coin-list { list-style: none; }
+    .coin-item { display: flex; align-items: center; padding: 9px 0; border-bottom: 1px solid var(--border); }
+    .coin-item:last-child { border-bottom: none; }
+    .coin-rank   { font-size: 11px; color: var(--muted); width: 20px; flex-shrink: 0; }
+    .coin-symbol { font-weight: 600; font-size: 14px; flex: 1; padding-left: 6px; }
+    .coin-price  { font-size: 12px; color: var(--muted); margin-right: 10px; font-variant-numeric: tabular-nums; }
+    .coin-chg    { font-size: 13px; font-weight: 600; min-width: 58px; text-align: right; }
+    .pos { color: var(--green); } .neg { color: var(--red); }
+
+    /* Log */
+    .log-bar {
+      display: flex; align-items: center; justify-content: space-between;
+      padding: 10px 16px; border-bottom: 1px solid var(--border);
+      background: var(--surface); flex-shrink: 0;
+    }
+    .fpills { display: flex; gap: 6px; }
+    .fpill {
+      padding: 4px 12px; border-radius: 20px; font-size: 12px; font-weight: 500;
+      border: 1px solid var(--border); background: none; color: var(--muted); cursor: pointer;
+    }
+    .fpill.active { background: var(--accent); border-color: var(--accent); color: #fff; }
+    .clear-btn { font-size: 12px; color: var(--muted); background: none; border: none; cursor: pointer; }
+
+    .log-scroll { flex: 1; overflow-y: auto; -webkit-overflow-scrolling: touch; }
+    .log-entries { padding: 0 16px; }
+    .log-item { padding: 10px 0; border-bottom: 1px solid var(--border); }
+    .log-item:last-child { border-bottom: none; }
+    .log-top { display: flex; justify-content: space-between; align-items: center; margin-bottom: 3px; }
+    .log-coin { font-weight: 600; font-size: 14px; }
+    .log-time { font-size: 11px; color: var(--muted); }
+    .log-data { font-size: 12px; color: var(--muted); }
+    .lbadge { display: inline-block; padding: 1px 6px; border-radius: 4px; font-size: 10px; font-weight: 700; margin-left: 6px; vertical-align: middle; }
+    .lb-alert { background: rgba(248,81,73,.15); color: var(--red);   border: 1px solid rgba(248,81,73,.3); }
+    .lb-ok    { background: rgba(63,185,80,.1);  color: var(--green); border: 1px solid rgba(63,185,80,.25); }
+    .empty-state { text-align: center; color: var(--muted); padding: 60px 20px; font-size: 14px; line-height: 1.7; }
+
+    /* Settings */
+    .settings-scroll { padding: 14px 16px 30px; overflow-y: auto; height: 100%; }
+    .sgroup { background: var(--surface); border: 1px solid var(--border); border-radius: 14px; overflow: hidden; margin-bottom: 16px; }
+    .sgroup-title { font-size: 10px; text-transform: uppercase; letter-spacing: .8px; color: var(--muted); padding: 10px 14px 0; }
+    .sitem { padding: 12px 14px; border-bottom: 1px solid var(--border); }
+    .sitem:last-child { border-bottom: none; }
+    .slabel { font-size: 13px; font-weight: 500; display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px; }
+    .slabel small { font-weight: 400; color: var(--muted); font-size: 11px; }
+
+    .sinput {
+      width: 100%; background: var(--surface2); border: 1px solid var(--border);
+      border-radius: 8px; padding: 10px 12px; color: var(--text);
+      font-size: 14px; font-family: monospace; outline: none;
+    }
+    .sinput:focus { border-color: var(--accent); }
+    .irow { display: flex; gap: 8px; }
+    .irow .sinput { flex: 1; }
+    .vis-btn {
+      padding: 10px 12px; flex-shrink: 0;
+      background: var(--surface2); border: 1px solid var(--border);
+      border-radius: 8px; color: var(--muted); font-size: 12px; cursor: pointer;
+    }
+    .snum {
+      background: var(--surface2); border: 1px solid var(--border);
+      border-radius: 8px; padding: 10px 12px; color: var(--text);
+      font-size: 14px; outline: none; width: 80px;
+    }
+    .sunit { font-size: 13px; color: var(--muted); margin-left: 8px; }
+
+    .toggle { position: relative; width: 44px; height: 26px; flex-shrink: 0; }
+    .toggle input { opacity: 0; width: 0; height: 0; }
+    .tslider { position: absolute; inset: 0; background: var(--border); border-radius: 26px; cursor: pointer; transition: background .2s; }
+    .tslider:before { content: ''; position: absolute; width: 20px; height: 20px; left: 3px; top: 3px; background: #fff; border-radius: 50%; transition: transform .2s; }
+    .toggle input:checked + .tslider { background: var(--accent); }
+    .toggle input:checked + .tslider:before { transform: translateX(18px); }
+
+    .save-btn {
+      width: 100%; padding: 14px; background: var(--accent); color: #fff;
+      border: none; border-radius: 12px; font-size: 15px; font-weight: 600;
+      cursor: pointer; margin-bottom: 10px;
+    }
+    .save-btn:active { opacity: .8; }
+    .hint { font-size: 11px; color: var(--muted); text-align: center; line-height: 1.7; }
+
+    /* Alert banner */
+    .alert-banner {
+      position: fixed; top: 0; left: 0; right: 0;
+      background: linear-gradient(135deg,#b91c1c,#dc2626);
+      color: #fff; padding: 18px 40px 14px 16px;
+      z-index: 200; box-shadow: 0 4px 20px rgba(0,0,0,.5);
+      transform: translateY(-100%);
+      transition: transform .35s cubic-bezier(.34,1.56,.64,1);
+    }
+    .alert-banner.show { transform: translateY(0); }
+    .alert-coin   { font-size: 18px; font-weight: 700; }
+    .alert-detail { font-size: 13px; margin-top: 4px; opacity: .9; }
+    .alert-close  {
+      position: absolute; top: 10px; right: 14px;
+      background: none; border: none; color: rgba(255,255,255,.8);
+      font-size: 22px; cursor: pointer; line-height: 1;
+    }
+
+    /* Toast */
+    .toast {
+      position: fixed; bottom: 76px; left: 50%;
+      transform: translateX(-50%);
+      background: var(--surface2); border: 1px solid var(--border);
+      color: var(--text); padding: 10px 20px;
+      border-radius: 20px; font-size: 13px;
+      z-index: 300; pointer-events: none;
+      opacity: 0; transition: opacity .25s; white-space: nowrap;
+    }
+    .toast.show { opacity: 1; }
+  </style>
+</head>
+<body>
+
+<!-- Header -->
+<div class="header">
+  <div><span class="header-title">CoinAlert</span><span class="header-sub">USDT pairs</span></div>
+  <div class="status-pill" id="statusPill">
+    <div class="sdot"></div>
+    <span id="statusText">Idle</span>
+  </div>
+</div>
+
+<!-- Pages -->
+<div class="content">
+
+  <!-- Dashboard -->
+  <div class="page active" id="page-dashboard">
+    <div class="pad">
+
+      <div class="card">
+        <div class="card-label">Next 1H Candle Close</div>
+        <div class="countdown-row">
+          <div class="countdown" id="countdown">--:--</div>
+          <div class="countdown-sub" id="closeTime"></div>
+        </div>
+      </div>
+
+      <button class="ctrl-btn start" id="ctrlBtn" onclick="toggleMonitoring()">
+        Start Monitoring
+      </button>
+      <button class="ctrl-btn" id="testBtn" onclick="forceCheck()" disabled
+        style="margin-top:8px;background:var(--surface);border:1px solid var(--border);color:var(--blue)">
+        Run Check Now
+      </button>
+
+      <div class="card" style="margin-top:14px">
+        <div class="gainers-hdr">
+          <div class="card-label" style="margin:0">Top 20 Drops — Last 1H</div>
+          <button class="refresh-btn" id="refreshBtn" onclick="manualRefresh()" disabled>Refresh</button>
+        </div>
+        <div class="updated-txt" id="updatedTxt"></div>
+        <ul class="coin-list" id="gainerList">
+          <li><div class="empty-state" style="padding:20px 0">Start monitoring to load gainers</div></li>
+        </ul>
+      </div>
+
+    </div>
+  </div>
+
+  <!-- Log -->
+  <div class="page" id="page-log">
+    <div class="log-bar">
+      <div class="fpills">
+        <button class="fpill active" onclick="setFilter('all',this)">All</button>
+        <button class="fpill" onclick="setFilter('alerts',this)">Alerts only</button>
+      </div>
+      <button class="clear-btn" onclick="clearLog()">Clear</button>
+    </div>
+    <div class="log-scroll">
+      <div class="log-entries" id="logEntries">
+        <div class="empty-state">No analysis yet.<br>Start monitoring from Dashboard.</div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Settings -->
+  <div class="page" id="page-settings">
+    <div class="settings-scroll">
+
+      <div class="sgroup">
+        <div class="sgroup-title">API Credentials</div>
+        <div class="sitem">
+          <div class="slabel">API Key</div>
+          <div class="irow">
+            <input class="sinput" type="password" id="apiKey" placeholder="Paste CoinDCX API key" autocomplete="off">
+            <button class="vis-btn" onclick="toggleVis('apiKey',this)">Show</button>
+          </div>
+        </div>
+        <div class="sitem">
+          <div class="slabel">API Secret</div>
+          <div class="irow">
+            <input class="sinput" type="password" id="apiSecret" placeholder="Paste API secret" autocomplete="off">
+            <button class="vis-btn" onclick="toggleVis('apiSecret',this)">Show</button>
+          </div>
+        </div>
+      </div>
+
+      <div class="sgroup">
+        <div class="sgroup-title">Alert Thresholds</div>
+        <div class="sitem">
+          <div class="slabel">Red candle body <small>min drop to alert</small></div>
+          <div style="display:flex;align-items:center">
+            <input class="snum" type="number" id="redPct" value="3" min="0.5" max="20" step="0.5">
+            <span class="sunit">% drop</span>
+          </div>
+        </div>
+        <div class="sitem">
+          <div class="slabel">Volume spike <small>vs 20-candle average</small></div>
+          <div style="display:flex;align-items:center">
+            <input class="snum" type="number" id="volMult" value="2" min="1" max="10" step="0.5">
+            <span class="sunit">x avg</span>
+          </div>
+        </div>
+      </div>
+
+      <div class="sgroup">
+        <div class="sgroup-title">Alerts</div>
+        <div class="sitem">
+          <div class="slabel">
+            Sound alarm
+            <label class="toggle">
+              <input type="checkbox" id="soundOn" checked>
+              <span class="tslider"></span>
+            </label>
+          </div>
+        </div>
+      </div>
+
+      <button class="save-btn" onclick="saveSettings()">Save Settings</button>
+      <div class="hint">
+        Credentials stored only on this device.<br>
+        Keep this tab open in Chrome for monitoring to run.
+      </div>
+
+    </div>
+  </div>
+
+</div>
+
+<!-- Bottom Nav -->
+<nav class="bottom-nav">
+  <button class="nav-btn active" onclick="showPage('dashboard',this)">
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+      <rect x="3" y="3" width="7" height="7" rx="1"/><rect x="14" y="3" width="7" height="7" rx="1"/>
+      <rect x="3" y="14" width="7" height="7" rx="1"/><rect x="14" y="14" width="7" height="7" rx="1"/>
+    </svg>
+    Dashboard
+  </button>
+  <button class="nav-btn" onclick="showPage('log',this)">
+    <div class="nav-wrap">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+        <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/>
+        <polyline points="14 2 14 8 20 8"/>
+        <line x1="16" y1="13" x2="8" y2="13"/>
+        <line x1="16" y1="17" x2="8" y2="17"/>
+      </svg>
+      <div class="badge" id="alertBadge"></div>
+      Log
+    </div>
+  </button>
+  <button class="nav-btn" onclick="showPage('settings',this)">
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+      <circle cx="12" cy="12" r="3"/>
+      <path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83-2.83l.06-.06A1.65 1.65 0 0 0 4.68 15a1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 2.83-2.83l.06.06A1.65 1.65 0 0 0 9 4.68a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 2.83l-.06.06A1.65 1.65 0 0 0 19.4 9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/>
+    </svg>
+    Settings
+  </button>
+</nav>
+
+<!-- Alert Banner -->
+<div class="alert-banner" id="alertBanner">
+  <button class="alert-close" onclick="dismissAlert()">&#x2715;</button>
+  <div class="alert-coin"   id="alertCoin"></div>
+  <div class="alert-detail" id="alertDetail"></div>
+</div>
+
+<div class="toast" id="toast"></div>
+
+<script>
+// ─── State ────────────────────────────────────────────────────────
+let monitoring    = false;
+let topGainers    = [];
+let logItems      = [];   // in-memory only, max 50
+let logFilter     = 'all';
+let checkTimer    = null;
+let unreadAlerts  = 0;
+let settings      = {};
+
+// ─── Boot ─────────────────────────────────────────────────────────
+window.addEventListener('load', () => {
+  loadSettings();
+  tickCountdown();
+  setInterval(tickCountdown, 1000);
+});
+
+// ─── Settings ─────────────────────────────────────────────────────
+function loadSettings() {
+  const s = JSON.parse(localStorage.getItem('ca_settings') || '{}');
+  settings = {
+    apiKey:    s.apiKey    || '',
+    apiSecret: s.apiSecret || '',
+    redPct:    s.redPct    ?? 3,
+    volMult:   s.volMult   ?? 2,
+    soundOn:   s.soundOn   ?? true,
+  };
+  document.getElementById('apiKey').value    = settings.apiKey;
+  document.getElementById('apiSecret').value = settings.apiSecret;
+  document.getElementById('redPct').value    = settings.redPct;
+  document.getElementById('volMult').value   = settings.volMult;
+  document.getElementById('soundOn').checked = settings.soundOn;
+}
+
+function saveSettings() {
+  settings = {
+    apiKey:    document.getElementById('apiKey').value.trim(),
+    apiSecret: document.getElementById('apiSecret').value.trim(),
+    redPct:    parseFloat(document.getElementById('redPct').value),
+    volMult:   parseFloat(document.getElementById('volMult').value),
+    soundOn:   document.getElementById('soundOn').checked,
+  };
+  localStorage.setItem('ca_settings', JSON.stringify(settings));
+  showToast('Settings saved');
+}
+
+// ─── Navigation ───────────────────────────────────────────────────
+function showPage(name, btn) {
+  document.querySelectorAll('.page').forEach(p => p.classList.remove('active'));
+  document.querySelectorAll('.nav-btn').forEach(b => b.classList.remove('active'));
+  document.getElementById('page-' + name).classList.add('active');
+  btn.classList.add('active');
+  if (name === 'log') { unreadAlerts = 0; updateBadge(); }
+}
+
+function updateBadge() {
+  const b = document.getElementById('alertBadge');
+  if (unreadAlerts > 0) { b.textContent = unreadAlerts > 9 ? '9+' : unreadAlerts; b.classList.add('show'); }
+  else                  { b.classList.remove('show'); }
+}
+
+// ─── Countdown ────────────────────────────────────────────────────
+// CoinDCX 1H candles close at :30 UTC (1:30, 2:30, 3:30 UTC …)
+function nextCandleClose() {
+  // Candles close at :00 UTC = :30 IST (e.g. 5:30, 6:30, 7:30 IST)
+  const now  = new Date();
+  const next = new Date(now);
+  next.setUTCHours(now.getUTCHours() + 1, 0, 0, 0);
+  return next;
+}
+
+function tickCountdown() {
+  const now  = new Date();
+  const next = nextCandleClose();
+  const diff = next - now;
+  const m = Math.floor(diff / 60000);
+  const s = Math.floor((diff % 60000) / 1000);
+  document.getElementById('countdown').textContent =
+    String(m).padStart(2,'0') + ':' + String(s).padStart(2,'0');
+  document.getElementById('closeTime').textContent =
+    'closes ' + next.toLocaleTimeString([], { hour:'2-digit', minute:'2-digit' });
+}
+
+// ─── Monitoring ───────────────────────────────────────────────────
+async function toggleMonitoring() {
+  monitoring ? stop() : await start();
+}
+
+async function start() {
+  if (!settings.apiKey || !settings.apiSecret) {
+    showToast('Add API key & secret in Settings first');
+    return;
+  }
+  monitoring = true;
+  document.getElementById('ctrlBtn').textContent = 'Stop Monitoring';
+  document.getElementById('ctrlBtn').className = 'ctrl-btn stop';
+  document.getElementById('refreshBtn').disabled = false;
+  document.getElementById('testBtn').disabled = false;
+  setStatus('on', 'Monitoring');
+  sysLog('Monitoring started');
+  await fetchGainers();
+  scheduleCheck();
+}
+
+function stop() {
+  monitoring = false;
+  clearTimeout(checkTimer);
+  document.getElementById('ctrlBtn').textContent = 'Start Monitoring';
+  document.getElementById('ctrlBtn').className = 'ctrl-btn start';
+  document.getElementById('refreshBtn').disabled = true;
+  document.getElementById('testBtn').disabled = true;
+  setStatus('', 'Idle');
+  sysLog('Monitoring stopped');
+}
+
+async function manualRefresh() {
+  if (monitoring) await fetchGainers();
+}
+
+async function forceCheck() {
+  if (!monitoring) return;
+  const btn = document.getElementById('testBtn');
+  btn.disabled = true;
+  btn.textContent = 'Running...';
+  await runCheck();
+  btn.textContent = 'Run Check Now';
+  btn.disabled = false;
+}
+
+function scheduleCheck() {
+  if (!monitoring) return;
+  const next  = nextCandleClose();
+  const delay = (next - new Date()) + 8000; // 8s after candle close
+  checkTimer = setTimeout(async () => {
+    if (!monitoring) return;
+    await runCheck();
+    scheduleCheck();
+  }, delay);
+  sysLog(`Next check at ${next.toLocaleTimeString([], { hour:'2-digit', minute:'2-digit' })} local`);
+}
+
+// ─── CORS-safe fetch ──────────────────────────────────────────────
+async function safeFetch(url) {
+  const enc = encodeURIComponent(url);
+  const log = [];
+
+  const attempt = async (label, fetchUrl, transform) => {
+    try {
+      const r = await fetch(fetchUrl);
+      if (r.ok) return transform ? transform(r) : r;
+      log.push(`${label}:${r.status}`);
+    } catch (e) {
+      log.push(`${label}:${e.message.slice(0,30)}`);
+    }
+    return null;
+  };
+
+  let r;
+  r = await attempt('direct', url);
+  if (r) return r;
+
+  r = await attempt('corsproxy', 'https://corsproxy.io/?' + enc);
+  if (r) return r;
+
+  r = await attempt('allorigins-raw', 'https://api.allorigins.win/raw?url=' + enc);
+  if (r) return r;
+
+  // allorigins JSON wrapper
+  try {
+    const res = await fetch('https://api.allorigins.win/get?url=' + enc);
+    if (res.ok) {
+      const j = await res.json();
+      if (j.contents) return new Response(j.contents);
+      log.push('allorigins-get:empty');
+    } else {
+      log.push('allorigins-get:' + res.status);
+    }
+  } catch (e) { log.push('allorigins-get:' + e.message.slice(0,30)); }
+
+  throw new Error(log.join(' | '));
+}
+
+// ─── Fetch Top 10 by 1H Move ──────────────────────────────────────
+async function fetchGainers() {
+  setStatus('on', 'Scanning movers...');
+  try {
+    // Step 1: get all INR tickers, keep top 30 by 24h volume (active markets only)
+    const res  = await safeFetch('https://api.coindcx.com/exchange/ticker');
+    const data = await res.json();
+    const candidates = data
+      .filter(t => t.market.endsWith('USDT') && parseFloat(t.volume) > 0)
+      .sort((a, b) => parseFloat(b.volume) - parseFloat(a.volume))
+      .slice(0, 60);
+
+    // Step 2: fetch last closed 1H candle for each and calculate 1H % change
+    const results = [];
+    for (const coin of candidates) {
+      try {
+        const base = coin.market.replace(/USDT$/, '');
+        const pair = `B-${base}_USDT`;
+        const url  = `https://public.coindcx.com/market_data/candles?pair=${encodeURIComponent(pair)}&resolution=60&limit=3`;
+        const r    = await safeFetch(url);
+        const candles = await r.json();
+        if (!Array.isArray(candles) || candles.length < 2) continue;
+
+        const closed  = candles[candles.length - 2]; // last fully closed candle
+        const open    = parseFloat(closed.open);
+        const close   = parseFloat(closed.close);
+        const change1h = ((close - open) / open) * 100;
+
+        results.push({ market: coin.market, last_price: coin.last_price, change1h });
+      } catch (_) {}
+      await sleep(150);
+    }
+
+    // Step 3: keep only drops, sort biggest drop first, take top 20
+    topGainers = results
+      .filter(r => r.change1h < 0)
+      .sort((a, b) => a.change1h - b.change1h)
+      .slice(0, 20);
+
+    renderGainers();
+    document.getElementById('updatedTxt').textContent = 'Updated ' + ts();
+    setStatus('on', 'Monitoring');
+  } catch (err) {
+    setStatus('err', 'API Error');
+    sysLog('Fetch failed: ' + err.message);
+    showToast('API Error: ' + err.message);
+  }
+}
+
+function renderGainers() {
+  const ul = document.getElementById('gainerList');
+  if (!topGainers.length) {
+    ul.innerHTML = '<li><div class="empty-state" style="padding:20px 0">No data yet</div></li>';
+    return;
+  }
+  ul.innerHTML = topGainers.map((t, i) => {
+    const base = t.market.replace(/USDT$/, '');
+    const chg  = t.change1h;
+    const p    = parseFloat(t.last_price);
+    const ps   = p >= 1000 ? p.toFixed(0) : p >= 1 ? p.toFixed(4) : p.toFixed(6);
+    const sign = chg >= 0 ? '+' : '';
+    const cls  = chg >= 0 ? 'pos' : 'neg';
+    return `<li class="coin-item">
+      <span class="coin-rank">${i+1}</span>
+      <span class="coin-symbol">${base}</span>
+      <span class="coin-price">$${ps}</span>
+      <span class="coin-chg ${cls}">${sign}${chg.toFixed(2)}%</span>
+    </li>`;
+  }).join('');
+}
+
+// ─── Candle Check ─────────────────────────────────────────────────
+async function runCheck() {
+  await fetchGainers(); // always refresh movers list at candle close
+  sysLog(`Checking ${topGainers.length} coins`);
+  for (const coin of topGainers) {
+    await analyzeCandle(coin);
+    await sleep(300);
+  }
+}
+
+async function analyzeCandle(coin) {
+  const base = coin.market.replace(/USDT$/, '');
+  const pair = `B-${base}_USDT`;
+  const url  = `https://public.coindcx.com/market_data/candles?pair=${encodeURIComponent(pair)}&resolution=60&limit=22`;
+  try {
+    const res     = await safeFetch(url);
+    const candles = await res.json();
+    if (!Array.isArray(candles) || candles.length < 3) return;
+
+    const closed  = candles[candles.length - 2];  // last fully closed candle
+    const history = candles.slice(0, candles.length - 2); // previous 20
+
+    const open    = parseFloat(closed.open);
+    const close   = parseFloat(closed.close);
+    const vol     = parseFloat(closed.volume);
+    const avgVol  = history.reduce((s, c) => s + parseFloat(c.volume), 0) / history.length;
+
+    const bodyPct  = ((close - open) / open) * 100;
+    const volRatio = vol / avgVol;
+    const isAlert  = bodyPct <= -settings.redPct && volRatio >= settings.volMult;
+
+    addCandleLog({ coin: base, type: isAlert ? 'alert' : 'ok', bodyPct, volRatio, close });
+    if (isAlert) fireAlert(base, bodyPct, volRatio);
+
+  } catch (err) {
+    sysLog(`${base}: ${err.message}`);
+  }
+}
+
+// ─── Alert ────────────────────────────────────────────────────────
+function fireAlert(coin, bodyPct, volRatio) {
+  document.getElementById('alertCoin').textContent   = `BIG RED: ${coin}/USDT`;
+  document.getElementById('alertDetail').textContent =
+    `${Math.abs(bodyPct).toFixed(2)}% drop  |  ${volRatio.toFixed(1)}x volume`;
+  document.getElementById('alertBanner').classList.add('show');
+  setTimeout(dismissAlert, 9000);
+  if (settings.soundOn) playAlarm();
+}
+
+function dismissAlert() {
+  document.getElementById('alertBanner').classList.remove('show');
+}
+
+function playAlarm() {
+  try {
+    const ctx = new (window.AudioContext || window.webkitAudioContext)();
+    [[880,0],[550,0.2],[880,0.4],[550,0.6],[880,0.8]].forEach(([freq, t]) => {
+      const osc = ctx.createOscillator();
+      const g   = ctx.createGain();
+      osc.connect(g); g.connect(ctx.destination);
+      osc.frequency.value = freq;
+      osc.type = 'square';
+      g.gain.setValueAtTime(0.12, ctx.currentTime + t);
+      g.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + t + 0.18);
+      osc.start(ctx.currentTime + t);
+      osc.stop(ctx.currentTime + t + 0.19);
+    });
+  } catch(_) {}
+}
+
+// ─── Log (in-memory, max 50) ──────────────────────────────────────
+function sysLog(msg) {
+  push({ type:'sys', msg, time: ts() });
+}
+
+function addCandleLog(e) {
+  if (e.type === 'alert') { unreadAlerts++; updateBadge(); }
+  push({ type: e.type, coin: e.coin,
+         bodyPct: e.bodyPct.toFixed(2), volRatio: e.volRatio.toFixed(2),
+         close: e.close, time: ts() });
+}
+
+function push(item) {
+  logItems.unshift(item);
+  if (logItems.length > 50) logItems.length = 50;
+  renderLog();
+}
+
+function renderLog() {
+  const el   = document.getElementById('logEntries');
+  const list = logFilter === 'alerts' ? logItems.filter(i => i.type === 'alert') : logItems;
+  if (!list.length) {
+    el.innerHTML = '<div class="empty-state">No entries yet.</div>';
+    return;
+  }
+  el.innerHTML = list.map(item => {
+    if (item.type === 'sys') {
+      return `<div class="log-item" style="padding:7px 0">
+        <span style="font-size:12px;color:var(--muted)">${item.time} &mdash; ${item.msg}</span>
+      </div>`;
+    }
+    const isA  = item.type === 'alert';
+    const bc   = parseFloat(item.bodyPct) < 0 ? 'var(--red)' : 'var(--green)';
+    const vc   = parseFloat(item.volRatio) >= settings.volMult ? 'var(--yellow)' : 'var(--muted)';
+    const p    = parseFloat(item.close);
+    const ps   = p >= 10000 ? p.toFixed(0) : p >= 10 ? p.toFixed(2) : p.toFixed(4);
+    return `<div class="log-item">
+      <div class="log-top">
+        <span class="log-coin" style="${isA?'color:var(--red)':''}">
+          ${item.coin}/USDT
+          <span class="lbadge ${isA?'lb-alert':'lb-ok'}">${isA?'ALERT':'OK'}</span>
+        </span>
+        <span class="log-time">${item.time}</span>
+      </div>
+      <div class="log-data">
+        Body <span style="color:${bc}">${item.bodyPct}%</span>
+        &nbsp;&bull;&nbsp;
+        Vol <span style="color:${vc}">${item.volRatio}x</span>
+        &nbsp;&bull;&nbsp;
+        &#8377;${ps}
+      </div>
+    </div>`;
+  }).join('');
+}
+
+function setFilter(f, btn) {
+  logFilter = f;
+  document.querySelectorAll('.fpill').forEach(b => b.classList.remove('active'));
+  btn.classList.add('active');
+  renderLog();
+}
+
+function clearLog() {
+  logItems = []; unreadAlerts = 0;
+  updateBadge(); renderLog();
+}
+
+// ─── UI helpers ───────────────────────────────────────────────────
+function setStatus(cls, text) {
+  document.getElementById('statusPill').className = 'status-pill' + (cls ? ' ' + cls : '');
+  document.getElementById('statusText').textContent = text;
+}
+
+function toggleVis(id, btn) {
+  const el = document.getElementById(id);
+  const show = el.type === 'password';
+  el.type = show ? 'text' : 'password';
+  btn.textContent = show ? 'Hide' : 'Show';
+}
+
+function showToast(msg) {
+  const t = document.getElementById('toast');
+  t.textContent = msg; t.classList.add('show');
+  setTimeout(() => t.classList.remove('show'), 2500);
+}
+
+function ts() { return new Date().toLocaleTimeString([], { hour:'2-digit', minute:'2-digit', second:'2-digit' }); }
+function sleep(ms) { return new Promise(r => setTimeout(r, ms)); }
+</script>
+</body>
+</html>
