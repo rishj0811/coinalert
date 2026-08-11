@@ -533,11 +533,29 @@ function scheduleCheck() {
   sysLog(`Next check at ${next.toLocaleTimeString([], { hour:'2-digit', minute:'2-digit' })} local`);
 }
 
-// ─── Fetch ────────────────────────────────────────────────────────
+// ─── Fetch with proxy fallback ────────────────────────────────────
+const PROXIES = [
+  u => `https://api.allorigins.win/raw?url=${encodeURIComponent(u)}`,
+  u => `https://api.codetabs.com/v1/proxy?quest=${encodeURIComponent(u)}`,
+  u => `https://corsproxy.io/?${encodeURIComponent(u)}`,
+];
+
 async function safeFetch(url) {
-  const r = await fetch(url);
-  if (!r.ok) throw new Error('HTTP ' + r.status);
-  return r;
+  // Try direct first
+  try {
+    const r = await fetch(url);
+    if (r.ok) return r;
+  } catch (_) {}
+
+  // Try proxies
+  for (const proxy of PROXIES) {
+    try {
+      const r = await fetch(proxy(url));
+      if (r.ok) return r;
+    } catch (_) {}
+  }
+
+  throw new Error('CoinDCX unreachable — check connection');
 }
 
 // ─── Fetch Top 10 by 1H Move ──────────────────────────────────────
