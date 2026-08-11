@@ -278,7 +278,8 @@
     <div class="log-bar">
       <div class="fpills">
         <button class="fpill active" onclick="setFilter('all',this)">All</button>
-        <button class="fpill" onclick="setFilter('alerts',this)">Alerts only</button>
+        <button class="fpill" onclick="setFilter('alerts',this)">Alerts</button>
+        <button class="fpill" onclick="setFilter('debug',this)">Debug</button>
       </div>
       <button class="clear-btn" onclick="clearLog()">Clear</button>
     </div>
@@ -541,18 +542,22 @@ const PROXIES = [
 ];
 
 async function safeFetch(url) {
-  // Try direct first
+  const short = url.split('?')[0].replace('https://','');
+  dbgLog(`GET ${short}`);
+
   try {
     const r = await fetch(url);
-    if (r.ok) return r;
-  } catch (_) {}
+    if (r.ok) { dbgLog(`direct OK ${r.status}`); return r; }
+    dbgLog(`direct ${r.status}`);
+  } catch (e) { dbgLog(`direct err: ${e.message.slice(0,40)}`); }
 
-  // Try proxies
-  for (const proxy of PROXIES) {
+  const labels = ['allorigins', 'codetabs', 'corsproxy'];
+  for (let i = 0; i < PROXIES.length; i++) {
     try {
-      const r = await fetch(proxy(url));
-      if (r.ok) return r;
-    } catch (_) {}
+      const r = await fetch(PROXIES[i](url));
+      if (r.ok) { dbgLog(`${labels[i]} OK`); return r; }
+      dbgLog(`${labels[i]} ${r.status}`);
+    } catch (e) { dbgLog(`${labels[i]} err: ${e.message.slice(0,40)}`); }
   }
 
   throw new Error('CoinDCX unreachable — check connection');
@@ -571,23 +576,31 @@ async function fetchGainers() {
       .slice(0, 60);
 
     // Step 2: fetch last closed 1H candle for each and calculate 1H % change
+    dbgLog(`Ticker OK — ${data.length} total, ${candidates.length} USDT candidates by volume`);
+    sysLog(`Scanning ${candidates.length} coins for 1H drops...`);
     const results = [];
-    for (const coin of candidates) {
+    for (let i = 0; i < candidates.length; i++) {
+      const coin = candidates[i];
       try {
         const base = coin.market.replace(/USDT$/, '');
         const pair = `B-${base}_USDT`;
         const url  = `https://public.coindcx.com/market_data/candles?pair=${encodeURIComponent(pair)}&resolution=60&limit=3`;
         const r    = await safeFetch(url);
         const candles = await r.json();
-        if (!Array.isArray(candles) || candles.length < 2) continue;
+        if (!Array.isArray(candles) || candles.length < 2) {
+          dbgLog(`${base}: bad candle data (${candles?.length ?? 0} candles)`);
+          continue;
+        }
 
-        const closed  = candles[candles.length - 2]; // last fully closed candle
-        const open    = parseFloat(closed.open);
-        const close   = parseFloat(closed.close);
+        const closed   = candles[candles.length - 2];
+        const open     = parseFloat(closed.open);
+        const close    = parseFloat(closed.close);
         const change1h = ((close - open) / open) * 100;
 
+        dbgLog(`${base}: open=${open} close=${close} 1H=${change1h.toFixed(2)}%`);
         results.push({ market: coin.market, last_price: coin.last_price, change1h });
-      } catch (_) {}
+        setStatus('on', `Scanning ${i+1}/${candidates.length}`);
+      } catch (e) { dbgLog(`${coin.market} scan err: ${e.message.slice(0,40)}`); }
       await sleep(150);
     }
 
@@ -597,6 +610,7 @@ async function fetchGainers() {
       .sort((a, b) => a.change1h - b.change1h)
       .slice(0, 20);
 
+    sysLog(`Scan done — ${results.length} coins fetched, ${topGainers.length} drops found`);
     renderGainers();
     document.getElementById('updatedTxt').textContent = 'Updated ' + ts();
     setStatus('on', 'Monitoring');
@@ -631,12 +645,14 @@ function renderGainers() {
 
 // ─── Candle Check ─────────────────────────────────────────────────
 async function runCheck() {
-  await fetchGainers(); // always refresh movers list at candle close
-  sysLog(`Checking ${topGainers.length} coins`);
+  await fetchGainers();
+  sysLog(`Analysing top ${topGainers.length} drops for big red + high volume`);
   for (const coin of topGainers) {
+    sysLog(`Checking ${coin.market.replace(/USDT$/,'')}...`);
     await analyzeCandle(coin);
     await sleep(300);
   }
+  sysLog('Check complete');
 }
 
 async function analyzeCandle(coin) {
@@ -660,10 +676,13 @@ async function analyzeCandle(coin) {
     const volRatio = vol / avgVol;
     const isAlert  = bodyPct <= -settings.redPct && volRatio >= settings.volMult;
 
+    dbgLog(`${base}: body=${bodyPct.toFixed(2)}% (threshold -${settings.redPct}%) | vol=${volRatio.toFixed(2)}x (threshold ${settings.volMult}x) | ${isAlert ? 'ALERT' : 'ok'}`);
+
     addCandleLog({ coin: base, type: isAlert ? 'alert' : 'ok', bodyPct, volRatio, close });
     if (isAlert) fireAlert(base, bodyPct, volRatio);
 
   } catch (err) {
+    dbgLog(`${base} analyzeCandle err: ${err.message}`);
     sysLog(`${base}: ${err.message}`);
   }
 }
@@ -704,6 +723,10 @@ function sysLog(msg) {
   push({ type:'sys', msg, time: ts() });
 }
 
+function dbgLog(msg) {
+  push({ type:'debug', msg, time: ts() });
+}
+
 function addCandleLog(e) {
   if (e.type === 'alert') { unreadAlerts++; updateBadge(); }
   push({ type: e.type, coin: e.coin,
@@ -719,7 +742,9 @@ function push(item) {
 
 function renderLog() {
   const el   = document.getElementById('logEntries');
-  const list = logFilter === 'alerts' ? logItems.filter(i => i.type === 'alert') : logItems;
+  const list = logFilter === 'alerts' ? logItems.filter(i => i.type === 'alert')
+             : logFilter === 'debug'  ? logItems.filter(i => i.type === 'debug')
+             : logItems.filter(i => i.type !== 'debug');  // All = sys + candle results, no debug noise
   if (!list.length) {
     el.innerHTML = '<div class="empty-state">No entries yet.</div>';
     return;
@@ -728,6 +753,11 @@ function renderLog() {
     if (item.type === 'sys') {
       return `<div class="log-item" style="padding:7px 0">
         <span style="font-size:12px;color:var(--muted)">${item.time} &mdash; ${item.msg}</span>
+      </div>`;
+    }
+    if (item.type === 'debug') {
+      return `<div class="log-item" style="padding:5px 0;border-bottom:1px solid var(--border)">
+        <span style="font-size:11px;color:#6e7681;font-family:monospace">[${item.time}] ${item.msg}</span>
       </div>`;
     }
     const isA  = item.type === 'alert';
