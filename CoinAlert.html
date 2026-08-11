@@ -533,45 +533,11 @@ function scheduleCheck() {
   sysLog(`Next check at ${next.toLocaleTimeString([], { hour:'2-digit', minute:'2-digit' })} local`);
 }
 
-// ─── CORS-safe fetch ──────────────────────────────────────────────
+// ─── Fetch ────────────────────────────────────────────────────────
 async function safeFetch(url) {
-  const enc = encodeURIComponent(url);
-  const log = [];
-
-  const attempt = async (label, fetchUrl, transform) => {
-    try {
-      const r = await fetch(fetchUrl);
-      if (r.ok) return transform ? transform(r) : r;
-      log.push(`${label}:${r.status}`);
-    } catch (e) {
-      log.push(`${label}:${e.message.slice(0,30)}`);
-    }
-    return null;
-  };
-
-  let r;
-  r = await attempt('direct', url);
-  if (r) return r;
-
-  r = await attempt('corsproxy', 'https://corsproxy.io/?' + enc);
-  if (r) return r;
-
-  r = await attempt('allorigins-raw', 'https://api.allorigins.win/raw?url=' + enc);
-  if (r) return r;
-
-  // allorigins JSON wrapper
-  try {
-    const res = await fetch('https://api.allorigins.win/get?url=' + enc);
-    if (res.ok) {
-      const j = await res.json();
-      if (j.contents) return new Response(j.contents);
-      log.push('allorigins-get:empty');
-    } else {
-      log.push('allorigins-get:' + res.status);
-    }
-  } catch (e) { log.push('allorigins-get:' + e.message.slice(0,30)); }
-
-  throw new Error(log.join(' | '));
+  const r = await fetch(url);
+  if (!r.ok) throw new Error('HTTP ' + r.status);
+  return r;
 }
 
 // ─── Fetch Top 10 by 1H Move ──────────────────────────────────────
